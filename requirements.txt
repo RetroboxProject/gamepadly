@@ -1,0 +1,7 @@
+# requirements.txt
+
+# Mapper mando → teclado/ratón
+pygame>=2.6
+
+# evdev es específico para Linux
+evdev>=1.7; sys_platform == "linux"
