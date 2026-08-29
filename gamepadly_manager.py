@@ -11,6 +11,13 @@ Jerarquía de búsqueda de perfiles (primer match gana):
     profiles/{system}.keys
     profiles/{emulator}.keys
     profiles/any.keys                       ← fallback global
+
+Este módulo no importa nada de runtime.paths: todos los paths
+(mapper_script, profiles_dir, user_profiles_dir, es_input) los recibe por
+parámetro. Es responsabilidad del caller (emulatorlauncher.py) resolverlos
+y pasarlos. Así gamepadly queda igual de autocontenido que su propio motor
+(runtime/gamepadly/mapper/*), que ya recibe todo por CLI y no depende de
+retrobox_paths.
 """
 
 from __future__ import annotations
@@ -24,13 +31,6 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterator
-
-from runtime.retrobox_paths import (
-    GAMEPADLY_MAPPER,
-    _GAMEPADLY_PROFILES,
-    _GAMEPADLY_USER_PROFILES,
-    ES_INPUT_CFG,
-)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -48,12 +48,13 @@ def _profile_names(system: str, emulator: str, core: str) -> tuple[str, ...]:
         "any.keys",
     )
 
-
 def _profile_candidates(
     rom: Path,
     system: str,
     emulator: str,
     core: str,
+    profiles_dir: Path,
+    user_profiles_dir: Path,
 ) -> Iterator[Path]:
     # Override por juego.
     #
@@ -66,18 +67,21 @@ def _profile_candidates(
         yield rom.parent / f"{rom.name}.keys"
 
     # Perfiles de usuario primero, luego perfiles del sistema.
-    for base in (_GAMEPADLY_USER_PROFILES, _GAMEPADLY_PROFILES):
+    for base in (user_profiles_dir, profiles_dir):
         for name in _profile_names(system, emulator, core):
             yield base / name
-
 
 def find_profile(
     rom: Path,
     system: str,
     emulator: str,
     core: str,
+    profiles_dir: Path,
+    user_profiles_dir: Path,
 ) -> Path | None:
-    for path in _profile_candidates(rom, system, emulator, core):
+    for path in _profile_candidates(
+        rom, system, emulator, core, profiles_dir, user_profiles_dir
+    ):
         _logger.debug("gamepadly: comprobando perfil de mando en %s", path)
         if path.exists():
             _logger.debug("gamepadly: perfil → %s", path)
@@ -121,6 +125,12 @@ class GamepadManager(AbstractContextManager):
     y las termina al salir del contexto.
 
     Si no se encuentra ningún perfil .keys, no lanza nada.
+
+    mapper_script, profiles_dir, user_profiles_dir y es_input son los
+    únicos puntos de contacto con el resto de Retrobox: los resuelve el
+    caller (típicamente desde runtime.paths) y se los pasa a
+    este constructor. GamepadManager en sí no sabe nada de dónde vive
+    Retrobox instalado.
     """
 
     system: str
@@ -128,7 +138,10 @@ class GamepadManager(AbstractContextManager):
     core: str
     rom: Path
     controllers: "Controllers"
-    es_input: Path | None = None
+    mapper_script: Path
+    profiles_dir: Path
+    user_profiles_dir: Path
+    es_input: Path
 
     _processes: list[subprocess.Popen] = field(
         default_factory=list,
@@ -144,13 +157,14 @@ class GamepadManager(AbstractContextManager):
             system=self.system,
             emulator=self.emulator,
             core=self.core,
+            profiles_dir=self.profiles_dir,
+            user_profiles_dir=self.user_profiles_dir,
         )
         if profile is None:
             return self
 
-        es_input = self.es_input or ES_INPUT_CFG
-        if not es_input.exists():
-            _logger.warning("gamepadly: es_input not found en %s", es_input)
+        if not self.es_input.exists():
+            _logger.warning("gamepadly: es_input not found en %s", self.es_input)
             return self
 
         for controller in self.controllers:
@@ -158,7 +172,7 @@ class GamepadManager(AbstractContextManager):
             if getattr(controller, "type", "joystick") == "keyboard":
                 continue
 
-            self._launch(controller, profile, es_input)
+            self._launch(controller, profile, self.es_input)
 
         return self
 
@@ -189,7 +203,7 @@ class GamepadManager(AbstractContextManager):
 
         cmd = [
             sys.executable,
-            str(GAMEPADLY_MAPPER),
+            str(self.mapper_script),
             "--guid", guid,
             "--sdl_id", str(index),
             "--player", str(player),
