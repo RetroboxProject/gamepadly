@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
+          sudo apt-get install -y build-essential dpkg-dev debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
       - run: tools/build-deb.sh
       - uses: actions/upload-artifact@v4
         with: { name: deb, path: dist/*.deb }
