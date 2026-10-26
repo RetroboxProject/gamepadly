@@ -1,0 +1,148 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ matrix.python }}" }
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest -q
+
+  dist:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Tag matches pyproject version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          [ "v$(tools/version.sh)" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != $(tools/version.sh)"; exit 1; }
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with: { name: pypi-dist, path: dist/* }
+
+  deb:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
+      - run: tools/build-deb.sh
+      - uses: actions/upload-artifact@v4
+        with: { name: deb, path: dist/*.deb }
+
+  rpm:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: ["42", "43", "44"]
+    container: fedora:${{ matrix.fedora }}
+    steps:
+      - run: dnf install -y git rpm-build rpmdevtools python3-devel pyproject-rpm-macros systemd-rpm-macros python3-hatchling python3-pygame python3-evdev
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: tools/build-rpm.sh
+      - run: |
+          cd dist && for f in *.rpm; do mv "$f" "${f%.noarch.rpm}.fc${{ matrix.fedora }}.noarch.rpm"; done
+      - uses: actions/upload-artifact@v4
+        with: { name: "rpm-fc${{ matrix.fedora }}", path: dist/*.rpm }
+
+  smoke-deb:
+    needs: deb
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:24.04", "debian:trixie"]
+    container: ${{ matrix.image }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: deb, path: dist }
+      - run: apt-get update && apt-get install -y ./dist/*.deb
+      - name: Package contents are clean
+        run: |
+          dpkg -L python3-gamepadly | grep -v '/$' | grep -Ev '^/usr/(bin/gamepadly-mapper|lib/python3/dist-packages/gamepadly(-[0-9.]+\.dist-info)?(/|$)|lib/udev/rules\.d/70-gamepadly-uinput\.rules|lib/modules-load\.d/gamepadly-uinput\.conf|share/doc/python3-gamepadly/)' && exit 1 || true
+      - run: gamepadly-mapper --help >/dev/null && python3 -c "import gamepadly; print(gamepadly.__version__)"
+      - run: apt-get remove -y python3-gamepadly && ! command -v gamepadly-mapper
+
+  smoke-rpm:
+    needs: rpm
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        fedora: ["42", "43", "44"]
+    container: fedora:${{ matrix.fedora }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: "rpm-fc${{ matrix.fedora }}", path: dist }
+      - run: dnf install -y ./dist/*.rpm
+      - name: Package contents are clean
+        run: |
+          rpm -ql python3-gamepadly | grep -Ev '^/usr/(bin/gamepadly-mapper|lib/python3\.[0-9]+/site-packages/gamepadly|lib/udev/rules\.d/70-gamepadly-uinput\.rules|lib/modules-load\.d/gamepadly-uinput\.conf|share/(doc|licenses)/python3-gamepadly)' && exit 1 || true
+      - run: gamepadly-mapper --help >/dev/null && python3 -c "import gamepadly; print(gamepadly.__version__)"
+
+  smoke-install:
+    needs: dist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo ./install.sh -y
+      - run: |
+          test -x /usr/local/bin/gamepadly-mapper
+          python3 -c "import gamepadly,sys; assert gamepadly.__file__.startswith('/usr/local/'), gamepadly.__file__"
+          gamepadly-mapper --help >/dev/null
+      - run: |
+          sudo python3 -m pip uninstall -y --break-system-packages gamepadly
+          ! command -v gamepadly-mapper
+      - run: sudo ./install.sh --no-deps && sudo ./install.sh --uninstall && ! test -e /etc/udev/rules.d/70-gamepadly-uinput.rules
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, dist, smoke-deb, smoke-rpm, smoke-install]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*
+
+  pypi:
+    # Enable by creating the repo variable PUBLISH_PYPI=true and a trusted publisher on PyPI
+    # (project "gamepadly", workflow build.yml, environment "pypi").
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_PYPI == 'true'
+    needs: [test, dist, smoke-deb, smoke-rpm, smoke-install]
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: pypi-dist, path: dist }
+      - uses: pypa/gh-action-pypi-publish@release/v1

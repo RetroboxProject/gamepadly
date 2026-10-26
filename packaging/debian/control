@@ -1,0 +1,16 @@
+Source: gamepadly
+Section: python
+Priority: optional
+Maintainer: Manu Romero <manu4.2012@gmail.com>
+Build-Depends: debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject, python3-all, python3-hatchling
+Standards-Version: 4.6.2
+Homepage: https://github.com/manu-romero-411/gamepadly
+Rules-Requires-Root: no
+
+Package: python3-gamepadly
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}
+Description: Linux gamepad-to-keyboard/mouse mapper
+ Gamepadly translates gamepad input into virtual keyboard and mouse events
+ through uinput, using evmapy-compatible profiles. It provides the
+ gamepadly Python package and the gamepadly-mapper command.

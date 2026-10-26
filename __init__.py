@@ -1,1 +1,0 @@
-"""Gamepadly package."""

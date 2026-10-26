@@ -1,0 +1,2 @@
+system/70-gamepadly-uinput.rules usr/lib/udev/rules.d
+system/gamepadly-uinput.conf usr/lib/modules-load.d

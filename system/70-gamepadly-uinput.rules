@@ -1,0 +1,2 @@
+# Pad-to-keyboard mapper (gamepadly) needs to create virtual input devices.
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput", TAG+="uaccess"

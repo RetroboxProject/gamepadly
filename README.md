@@ -47,31 +47,50 @@ This is based on a previous implementation that I did on my parallel project: [r
 
 ---
 
-## Requirements
+## Installation
 
-- Python 3.10+
-- `pygame`
-- `evdev`
-- Access to input devices and `uinput`
+Gamepadly is a regular Python package (`import gamepadly`, command `gamepadly-mapper`).
+It needs Python 3.10+, `pygame` and `evdev`.
 
-Clone the repo in any directory on your system:
+**Debian / Ubuntu** (`.deb` from the [releases](https://github.com/manu-romero-411/gamepadly/releases) page):
 
 ```bash
-git clone https://github.com/manu-romero-411/gamepadly.git
+sudo apt install ./python3-gamepadly_<version>_all.deb
 ```
 
-Install dependencies with:
+**Fedora** (`.rpm`, one per Fedora release):
 
 ```bash
-python3 -m pip install --user -r requirements.txt
+sudo dnf install ./python3-gamepadly-<version>-1.fc<NN>.noarch.rpm
 ```
 
-If for some reason this doesn't work fine (would be unrare on Debian-based distros that lock `pip` by default), it's recommended to use a `venv` for installing the packages:
+Both install the package in the distribution's standard Python directory and pull `pygame`/`evdev`
+from the distro. They also ship the `uinput` udev rule and modules-load file.
+
+**Any distro, from a checkout or remotely** (installs with pip into `/usr/local`, installs distro
+dependencies with apt/dnf):
 
 ```bash
-python3 -m venv ./.venv
-. ./.venv/bin/activate
-python3 -m pip install -r requirements.txt
+sudo ./install.sh
+# or
+curl -fsSL https://raw.githubusercontent.com/manu-romero-411/gamepadly/main/install.sh | sudo bash
+```
+
+Useful options: `--ref v0.1.0`, `--no-deps`, `--pip-deps`, `--user`, `--uninstall`.
+Uninstall with `sudo ./install.sh --uninstall` or `sudo pip uninstall gamepadly`
+(the latter leaves the udev rule in `/etc`).
+
+**From PyPI** (once published) or in a virtualenv:
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install gamepadly
+```
+
+**Development:**
+
+```bash
+pip install -e ".[dev]" && pytest
 ```
 
 ---
@@ -97,7 +116,7 @@ sudo modprobe uinput
 You can verify input permissions by running:
 
 ```bash
-python3 gamepadly_mapper.py --list
+gamepadly-mapper --list
 ```
 
 If no controllers are detected, check:
@@ -113,18 +132,18 @@ groups $USER | grep -w input
 List connected gamepads:
 
 ```bash
-python3 gamepadly_mapper.py --list
+gamepadly-mapper --list
 ```
 
 Run the mapper manually:
 
 ```bash
-python3 gamepadly_mapper.py \
+gamepadly-mapper \
   --guid 050000007e0500000920000001800000 \
   --sdl_id 0 \
   --player 1 \
   --es-input ~/.emulationstation/es_input.cfg \
-  --profile profiles/example.keys
+  --profile ~/.config/gamepadly/profiles/example.keys
 ```
 
 If no profile is provided, a default built-in profile is used.
@@ -134,9 +153,9 @@ If no profile is provided, a default built-in profile is used.
 ## Command-Line Usage
 
 ```text
-python3 gamepadly_mapper.py --list
+gamepadly-mapper --list
 
-python3 gamepadly_mapper.py \
+gamepadly-mapper \
   --guid <GUID> \
   --sdl_id <N> \
   --player <N> \
@@ -160,7 +179,7 @@ python3 gamepadly_mapper.py \
 Example:
 
 ```bash
-python3 gamepadly_mapper.py \
+gamepadly-mapper \
   --guid 050000007e0500000920000001800000 \
   --sdl_id 0 \
   --player 1 \
@@ -696,7 +715,7 @@ If running from inside the `gamepadly` directory, a launcher script can also be 
 
 ```bash
 cd ~/Escritorio/gamepadly
-python3 gamepadly_mapper.py --list
+gamepadly-mapper --list
 ```
 
 ---
@@ -759,7 +778,7 @@ Check the following:
 - Debug logging is enabled:
 
 ```bash
-python3 gamepadly_mapper.py --debug ...
+gamepadly-mapper --debug ...
 ```
 
 ---
@@ -777,7 +796,7 @@ Possible causes:
 Use debug mode to inspect combo resolution:
 
 ```bash
-python3 gamepadly_mapper.py --debug ...
+gamepadly-mapper --debug ...
 ```
 
 ---
@@ -785,3 +804,19 @@ python3 gamepadly_mapper.py --debug ...
 ## License
 
 See `LICENSE` file for more details.
+
+---
+
+## Python API
+
+```python
+from gamepadly import GamepadManager
+
+with GamepadManager(system="snes", emulator="libretro", core="snes9x", rom=rom_path,
+                    controllers=controllers,  # objects with .guid, .index, .player_number
+                    profiles_dir=system_profiles, user_profiles_dir=user_profiles,
+                    es_input=es_input_cfg):
+    run_game()
+```
+
+The mapper is launched as `python -m gamepadly.mapper`; pass `mapper_command=(...)` to override it.
