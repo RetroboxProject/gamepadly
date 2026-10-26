@@ -83,7 +83,7 @@ jobs:
       - run: apt-get update && apt-get install -y ./dist/*.deb
       - name: Package contents are clean
         run: |
-          dpkg -L python3-gamepadly | grep -v '/$' | grep -Ev '^/usr/(bin/gamepadly-mapper|lib/python3/dist-packages/gamepadly(-[0-9.]+\.dist-info)?(/|$)|lib/udev/rules\.d/70-gamepadly-uinput\.rules|lib/modules-load\.d/gamepadly-uinput\.conf|share/doc/python3-gamepadly/)' && exit 1 || true
+          dpkg -L python3-gamepadly | while read -r f; do [ -d "$f" ] || echo "$f"; done | grep -Ev '^/usr/(bin/gamepadly-mapper|lib/python3/dist-packages/gamepadly(-[0-9.]+\.dist-info)?(/|$)|lib/udev/rules\.d/70-gamepadly-uinput\.rules|lib/modules-load\.d/gamepadly-uinput\.conf|share/doc/python3-gamepadly/)' && exit 1 || true
       - run: gamepadly-mapper --help >/dev/null && python3 -c "import gamepadly; print(gamepadly.__version__)"
       - run: apt-get remove -y python3-gamepadly && ! command -v gamepadly-mapper
 
@@ -101,7 +101,7 @@ jobs:
       - run: dnf install -y ./dist/*.rpm
       - name: Package contents are clean
         run: |
-          rpm -ql python3-gamepadly | grep -Ev '^/usr/(bin/gamepadly-mapper|lib/python3\.[0-9]+/site-packages/gamepadly|lib/udev/rules\.d/70-gamepadly-uinput\.rules|lib/modules-load\.d/gamepadly-uinput\.conf|share/(doc|licenses)/python3-gamepadly)' && exit 1 || true
+          rpm -ql python3-gamepadly | while read -r f; do [ -d "$f" ] || echo "$f"; done | grep -Ev '^/usr/(bin/gamepadly-mapper|lib/python3\.[0-9]+/site-packages/gamepadly|lib/udev/rules\.d/70-gamepadly-uinput\.rules|lib/modules-load\.d/gamepadly-uinput\.conf|share/(doc|licenses)/python3-gamepadly)' && exit 1 || true
       - run: gamepadly-mapper --help >/dev/null && python3 -c "import gamepadly; print(gamepadly.__version__)"
 
   smoke-install:
