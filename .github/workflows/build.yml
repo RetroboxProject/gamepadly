@@ -31,10 +31,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Tag matches pyproject version
+      - name: Version from tag
         if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          [ "v$(tools/version.sh)" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != $(tools/version.sh)"; exit 1; }
+        run: sed -i "s/^version = .*/version = \"${GITHUB_REF_NAME#v}\"/" pyproject.toml
       - run: pip install build twine
       - run: python -m build
       - run: twine check dist/*
@@ -45,6 +44,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: sed -i "s/^version = .*/version = \"${GITHUB_REF_NAME#v}\"/" pyproject.toml
       - run: |
           sudo apt-get update
           sudo apt-get install -y build-essential dpkg-dev debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
@@ -63,6 +65,9 @@ jobs:
       - run: dnf install -y git rpm-build rpmdevtools python3-devel pyproject-rpm-macros systemd-rpm-macros python3-hatchling python3-pygame python3-evdev
       - uses: actions/checkout@v4
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: sed -i "s/^version = .*/version = \"${GITHUB_REF_NAME#v}\"/" pyproject.toml
       - run: tools/build-rpm.sh
       - run: |
           cd dist && for f in *.rpm; do mv "$f" "${f%.noarch.rpm}.fc${{ matrix.fedora }}.noarch.rpm"; done
@@ -120,8 +125,10 @@ jobs:
       - run: sudo ./install.sh --no-deps && sudo ./install.sh --uninstall && ! test -e /etc/udev/rules.d/70-gamepadly-uinput.rules
 
   release:
+    # Every tag v* publishes a GitHub release as soon as the packages build; the smoke tests
+    # run in parallel (they gate PyPI below, not the release).
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, dist, smoke-deb, smoke-rpm, smoke-install]
+    needs: [dist, deb, rpm]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
