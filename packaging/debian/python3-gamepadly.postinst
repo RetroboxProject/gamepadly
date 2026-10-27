@@ -1,8 +1,30 @@
 #!/bin/sh
 set -e
+
+add_input_group() {
+    # /dev/uinput and /dev/input/* are group "input": add the invoking (sudo) user, or else
+    # every regular user (UID 1000-59999 with a login shell). Opt out: GAMEPADLY_NO_INPUT_GROUP=1
+    [ "${GAMEPADLY_NO_INPUT_GROUP:-}" = 1 ] && return 0
+    getent group input >/dev/null 2>&1 || return 0
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+        _users="$SUDO_USER"
+    else
+        _users="$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /(nologin|false)$/ {print $1}')"
+    fi
+    for _u in $_users; do
+        id -nG "$_u" 2>/dev/null | tr ' ' '\n' | grep -qx input && continue
+        if usermod -aG input "$_u" 2>/dev/null; then
+            echo "gamepadly: added $_u to the 'input' group (log out and back in to apply)" >&2
+        fi
+    done
+}
 if [ "$1" = configure ] && command -v udevadm >/dev/null 2>&1; then
     udevadm control --reload-rules 2>/dev/null || true
     udevadm trigger --subsystem-match=misc --sysname-match=uinput 2>/dev/null || true
+fi
+# Fresh installs only: don't re-add users who were deliberately removed from the group.
+if [ "$1" = configure ] && [ -z "$2" ]; then
+    add_input_group || true
 fi
 #DEBHELPER#
 exit 0

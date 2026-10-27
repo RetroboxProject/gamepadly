@@ -101,6 +101,24 @@ system_files() { # source -> destination
     echo "$SRC/system/gamepadly-uinput.conf $SYSCONF/modules-load.d/gamepadly-uinput.conf"
 }
 
+add_input_group() {
+    # /dev/uinput and /dev/input/* are group "input": add the invoking (sudo) user, or else
+    # every regular user (UID 1000-59999 with a login shell). Opt out: GAMEPADLY_NO_INPUT_GROUP=1
+    [ "${GAMEPADLY_NO_INPUT_GROUP:-}" = 1 ] && return 0
+    getent group input >/dev/null 2>&1 || return 0
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then
+        _users="$SUDO_USER"
+    else
+        _users="$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /(nologin|false)$/ {print $1}')"
+    fi
+    for _u in $_users; do
+        id -nG "$_u" 2>/dev/null | tr ' ' '\n' | grep -qx input && continue
+        if usermod -aG input "$_u" 2>/dev/null; then
+            echo "gamepadly: added $_u to the 'input' group (log out and back in to apply)" >&2
+        fi
+    done
+}
+
 reload_udev() {
     command -v udevadm >/dev/null 2>&1 || return 0
     udevadm control --reload-rules 2>/dev/null || true
@@ -128,6 +146,7 @@ do_install() {
         done < <(system_files)
         reload_udev
         modprobe uinput 2>/dev/null || true
+        add_input_group
     else
         warn "--user: udev rule and modules-load not installed; /dev/uinput needs permissions"
     fi
@@ -136,7 +155,7 @@ do_install() {
         loc="$(python3 -c 'import gamepadly,sys;print(gamepadly.__file__)' 2>/dev/null || true)"
         [[ "$loc" == /usr/local/* ]] || warn "installed outside /usr/local ($loc)"
     fi
-    log "done. Add your user to the 'input' group if needed, then run: gamepadly-mapper --help"
+    log "done. Run: gamepadly-mapper --help (log out and back in if you were just added to the 'input' group)"
 }
 
 do_uninstall() {
