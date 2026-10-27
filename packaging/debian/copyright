@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: gamepadly
-Source: https://github.com/manu-romero-411/gamepadly
+Source: https://github.com/RetroboxProject/gamepadly
 
 Files: *
 Copyright: Manu Romero

@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Manu Romero <manu4.2012@gmail.com>
 Build-Depends: debhelper-compat (= 13), dh-python, pybuild-plugin-pyproject, python3-all, python3-hatchling
 Standards-Version: 4.6.2
-Homepage: https://github.com/manu-romero-411/gamepadly
+Homepage: https://github.com/RetroboxProject/gamepadly
 Rules-Requires-Root: no
 
 Package: python3-gamepadly

@@ -4,7 +4,7 @@ Gamepadly is a Linux gamepad-to-keyboard/mouse mapper. It reads controller input
 
 As this project is intended to be used on a couch gaming/emulation setup, it's compatible with Batocera-style `evmapy` profiles, while adding extra features such as scroll wheel emulation, combo cooldowns, or an integration-oriented manager API.
 
-This is based on a previous implementation that I did on my parallel project: [retrobox](https://github.com/manu-romero-411/retrobox-core.git)
+This is based on a previous implementation that I did on my parallel project: [retrobox](https://github.com/RetroboxProject/retrobox-core.git)
 
 ---
 
@@ -52,7 +52,7 @@ This is based on a previous implementation that I did on my parallel project: [r
 Gamepadly is a regular Python package (`import gamepadly`, command `gamepadly-mapper`).
 It needs Python 3.10+, `pygame` and `evdev`.
 
-**Debian / Ubuntu** (`.deb` from the [releases](https://github.com/manu-romero-411/gamepadly/releases) page):
+**Debian / Ubuntu** (`.deb` from the [releases](https://github.com/RetroboxProject/gamepadly/releases) page):
 
 ```bash
 sudo apt install ./python3-gamepadly_<version>_all.deb
@@ -73,7 +73,7 @@ dependencies with apt/dnf):
 ```bash
 sudo ./install.sh
 # or
-curl -fsSL https://raw.githubusercontent.com/manu-romero-411/gamepadly/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/RetroboxProject/gamepadly/main/install.sh | sudo bash
 ```
 
 Useful options: `--ref v0.1.0`, `--no-deps`, `--pip-deps`, `--user`, `--uninstall`.

@@ -5,7 +5,7 @@ Version:        @VERSION@
 Release:        1%{?dist}
 Summary:        Linux gamepad-to-keyboard/mouse mapper
 License:        GPL-2.0-only
-URL:            https://github.com/manu-romero-411/gamepadly
+URL:            https://github.com/RetroboxProject/gamepadly
 Source0:        %{pypi_name}-%{version}.tar.gz
 BuildArch:      noarch
 

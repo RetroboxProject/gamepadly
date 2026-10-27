@@ -4,11 +4,11 @@
 # and modules-load file that give /dev/uinput the right permissions.
 #
 # Local checkout:  ./install.sh
-# Remote:          curl -fsSL https://raw.githubusercontent.com/manu-romero-411/gamepadly/main/install.sh | sudo bash
+# Remote:          curl -fsSL https://raw.githubusercontent.com/RetroboxProject/gamepadly/main/install.sh | sudo bash
 #                  ... | sudo bash -s -- --ref v0.1.0
 set -euo pipefail
 
-REPO="manu-romero-411/gamepadly"
+REPO="RetroboxProject/gamepadly"
 REF="main"
 PY_PREFIX="/usr/local"
 SYSCONF="/etc"

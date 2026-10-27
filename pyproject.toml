@@ -39,9 +39,9 @@ dev = ["pytest>=7", "ruff", "build", "twine"]
 gamepadly-mapper = "gamepadly.mapper.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/manu-romero-411/gamepadly"
-Repository = "https://github.com/manu-romero-411/gamepadly"
-Issues = "https://github.com/manu-romero-411/gamepadly/issues"
+Homepage = "https://github.com/RetroboxProject/gamepadly"
+Repository = "https://github.com/RetroboxProject/gamepadly"
+Issues = "https://github.com/RetroboxProject/gamepadly/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gamepadly"]
