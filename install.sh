@@ -66,13 +66,14 @@ fi
 pip_cmd() { python3 -m pip "$@"; }
 
 install_distro_deps() {
+    # Non-interactive when there is no terminal (CI, curl | bash) and never pull in
+    # "recommended" packages (python3-pip would otherwise bring a whole C toolchain).
     local yes=()
+    if ((ASSUME_YES)) || [[ ! -t 0 ]]; then yes=(-y); fi
     if command -v apt-get >/dev/null 2>&1; then
-        ((ASSUME_YES)) && yes=(-y)
-        apt-get install "${yes[@]}" python3-pip python3-pygame python3-evdev
+        apt-get install "${yes[@]}" --no-install-recommends python3-pip python3-pygame python3-evdev
     elif command -v dnf >/dev/null 2>&1; then
-        ((ASSUME_YES)) && yes=(-y)
-        dnf install "${yes[@]}" python3-pip python3-pygame python3-evdev
+        dnf install "${yes[@]}" --setopt=install_weak_deps=False python3-pip python3-pygame python3-evdev
     else
         warn "no apt/dnf found: install python3-pip, pygame and evdev yourself or use --pip-deps"
     fi
