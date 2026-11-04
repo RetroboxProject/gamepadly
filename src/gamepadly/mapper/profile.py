@@ -334,16 +334,21 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data
 
 
-def load_profile(path: Path | str, player: int = 1) -> Profile:
-    """Load the mappings of a player from an evmapy-compatible profile."""
+def load_profile(path: Path | str, player: int = 1, section: str | None = None) -> Profile:
+    """Load the mappings of a player from an evmapy-compatible profile.
+
+    ``section`` reads that list instead of the player's (e.g.
+    ``actions_keyboard``), with no fallback to ``mappings``.
+    """
     path = Path(path)
     data = _read_json(path)
 
     try:
         global_cooldown = float(data.get("cooldown", DEFAULT_COOLDOWN))
 
-        player_key = f"actions_player{player}"
-        entries = data.get(player_key) or data.get("mappings") or []
+        player_key = section or f"actions_player{player}"
+        fallback = None if section else data.get("mappings")
+        entries = data.get(player_key) or fallback or []
         if not isinstance(entries, list):
             entries = []
         if not entries:

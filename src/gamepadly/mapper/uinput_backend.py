@@ -66,7 +66,7 @@ class UInputPair:
             self.mouse.close()
 
 
-def build_uinput(resolved: ResolvedProfile, player: int) -> UInputPair:
+def build_uinput(resolved: ResolvedProfile, player: int | str) -> UInputPair:
     """Create the devices that declare every key and axis the profile uses."""
     kbd_keys: set[int] = set()
     mouse_buttons: set[int] = set()

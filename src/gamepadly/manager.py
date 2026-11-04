@@ -21,6 +21,7 @@ como `python -m gamepadly.mapper` (o con el comando que se indique en
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import signal
@@ -35,6 +36,9 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 _logger = logging.getLogger(__name__)
+
+KEYBOARD_SECTION = "actions_keyboard"
+"""Profile section of the keyboard hotkeys (see ``mapper.keyboard``)."""
 
 DEFAULT_MAPPER_COMMAND: tuple[str, ...] = (sys.executable, "-m", "gamepadly.mapper")
 
@@ -112,6 +116,15 @@ def find_profile(
     return None
 
 
+def _has_keyboard_mappings(profile: Path) -> bool:
+    """Tell whether the profile has a non-empty ``actions_keyboard`` section."""
+    try:
+        data = json.loads(profile.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(data, dict) and bool(data.get(KEYBOARD_SECTION))
+
+
 def _terminate_process(proc: subprocess.Popen) -> None:
     if proc.poll() is not None:
         return
@@ -185,12 +198,15 @@ class GamepadManager(AbstractContextManager):
         if profile is None:
             return self
 
+        if _has_keyboard_mappings(profile):
+            self._start(["--keyboard", "--profile", str(profile)], "keyboards")
+
         if not self.es_input.exists():
             _logger.warning("gamepadly: es_input not found en %s", self.es_input)
             return self
 
         for controller in self.controllers:
-            # Solo joysticks, no teclados.
+            # joysticks only: keyboards are all watched by the keyboard mapper
             if getattr(controller, "type", "joystick") == "keyboard":
                 continue
 
@@ -223,15 +239,6 @@ class GamepadManager(AbstractContextManager):
             )
             return
 
-        cmd = [
-            *self.mapper_command,
-            "--guid", guid,
-            "--sdl_id", str(index),
-            "--player", str(player),
-            "--es-input", str(es_input),
-            "--profile", str(profile),
-        ]
-
         _logger.info(
             "gamepadly: player=%d guid=%s sdl_id=%d perfil=%s",
             player,
@@ -239,7 +246,21 @@ class GamepadManager(AbstractContextManager):
             index,
             profile.name,
         )
-        _logger.debug("gamepadly: cmd=%s", " ".join(cmd))
+        self._start(
+            [
+                "--guid", guid,
+                "--sdl_id", str(index),
+                "--player", str(player),
+                "--es-input", str(es_input),
+                "--profile", str(profile),
+            ],
+            f"player {player}",
+        )
+
+    def _start(self, args: list[str], what: str) -> None:
+        """Start one mapper process with these arguments."""
+        cmd = [*self.mapper_command, *args]
+        _logger.debug("gamepadly: %s: cmd=%s", what, " ".join(cmd))
 
         try:
             # pylint: disable-next=consider-using-with  # owned by _stop_all()

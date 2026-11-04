@@ -394,6 +394,26 @@ so `hotkey` is `select`): it would hijack the game's input.
 Invalid mappings (unknown mode, negative hold, hold on a sequence, a sequence of one input,
 duplicate inputs or keys, tap on a combination) are logged and skipped, like evmapy rejects them.
 
+### Keyboard hotkeys
+
+A profile may also have an `actions_keyboard` section. When it is not empty, the manager starts
+one more mapper, `gamepadly-mapper --keyboard --profile <file>`, which watches every keyboard
+(read-only: nothing is grabbed, the focused window still gets every key) and fires those
+mappings. Triggers are evdev key names; the right-hand modifiers count as the left-hand ones, so
+`KEY_LEFTSHIFT` means either Shift:
+
+```json
+"actions_keyboard": [
+  {"trigger": ["KEY_LEFTSHIFT", "KEY_ESC"], "type": "exec", "target": "retrobox-emukill"},
+  {"trigger": ["KEY_LEFTSHIFT", "KEY_F1"], "type": "key", "target": ["KEY_LEFTALT", "KEY_F4"]}
+]
+```
+
+`key` (on a virtual keyboard of its own), `exec`, `mode`, `hold`, `tap` and `cooldown` work as
+for controllers; `mouse` and `scroll` mappings are ignored. Gamepadly's own virtual devices are
+never read, and keyboards plugged in later are picked up. It needs read access to
+`/dev/input/event*` (the `input` group).
+
 ### Stick directions
 
 EmulationStation stores one direction per stick axis (`joystick1up`, `joystick1left`...).

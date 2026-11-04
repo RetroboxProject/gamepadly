@@ -1,3 +1,5 @@
+"""Run a mapper: one controller (reconnecting when unplugged) or every keyboard."""
+
 from __future__ import annotations
 
 import logging
@@ -9,6 +11,7 @@ from .engine import MapperEngine
 from .es_input import parse_es_input
 from .exceptions import GamepadlyError
 from .joystick import find_joystick, init_pygame, quit_pygame
+from .keyboard import run_keyboard_mapper
 from .profile import load_profile
 from .pygame_backend import pygame
 from .resolver import resolve_profile
@@ -19,15 +22,24 @@ RECONNECT_INTERVAL = 2.0
 
 
 def _install_signal_handlers() -> None:
-    def _signal_handler(signum, frame):
+    def _signal_handler(_signum, _frame):
         raise SystemExit(0)
 
     try:
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
     except ValueError:
-        # No estamos en el hilo principal.
+        # not in the main thread
         pass
+
+
+def run_keyboard(profile_path: str) -> None:
+    """Run the keyboard mapper (see ``keyboard``) until stopped by a signal."""
+    _install_signal_handlers()
+    try:
+        run_keyboard_mapper(profile_path)
+    except SystemExit:
+        _logger.info("Stopped by EXIT signal")
 
 
 def run_mapper(
@@ -37,6 +49,7 @@ def run_mapper(
     es_input: str,
     profile_path: str | None = None,
 ) -> None:
+    """Map one controller until stopped by a signal, waiting for it when unplugged."""
     _install_signal_handlers()
     init_pygame()
 
@@ -61,7 +74,7 @@ def run_mapper(
             if joystick is None:
                 if first_attempt:
                     _logger.warning(
-                        "Mando GUID=%s not found. Waiting for connection...",
+                        "Controller GUID=%s not found. Waiting for connection...",
                         guid,
                     )
                     first_attempt = False
@@ -73,7 +86,7 @@ def run_mapper(
             first_attempt = True
 
             _logger.info(
-                "Mando conectado: '%s' (player=%d, sdl_id=%d)",
+                "Controller connected: '%s' (player=%d, sdl_id=%d)",
                 joystick.get_name(),
                 player,
                 sdl_id,
@@ -88,12 +101,13 @@ def run_mapper(
                 engine.run()
             except GamepadlyError:
                 raise
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
+                # a bug must not end the mapping: log it and wait for the controller again
                 _logger.exception("Unexpected error.")
             finally:
                 try:
                     joystick.quit()
-                except Exception:
+                except pygame.error:
                     pass
 
             _logger.warning("Gamepad was unplugged, waiting reconnection...")
