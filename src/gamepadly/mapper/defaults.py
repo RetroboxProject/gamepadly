@@ -1,13 +1,14 @@
+"""Built-in profile used when no profile is given."""
+
 from __future__ import annotations
 
 from .actions import ClickAction, KeyAction
 from .ecodes import ec
-from .profile import Hotkey, MouseAxisConfig, Profile
-
-DEFAULT_COOLDOWN = 0.5
+from .profile import DEFAULT_COOLDOWN, Hotkey, MouseAxisConfig, Profile
 
 
 def default_profile() -> Profile:
+    """Desktop-oriented mappings: closing windows, volume, mouse on the right stick."""
     hotkeys = (
         Hotkey(
             trigger=("hotkey", "start"),

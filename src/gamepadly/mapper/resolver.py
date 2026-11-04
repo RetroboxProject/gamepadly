@@ -1,3 +1,5 @@
+"""Bind a profile's input names to the physical inputs of a controller."""
+
 from __future__ import annotations
 
 import logging
@@ -12,6 +14,8 @@ _logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ResolvedAxisMouse:
+    """Pointer motion bound to the axes of one controller."""
+
     axis_id_x: int
     scale_x: int
     axis_id_y: int
@@ -24,6 +28,8 @@ class ResolvedAxisMouse:
 
 @dataclass(frozen=True)
 class ResolvedAxisScroll:
+    """Wheel motion bound to the axes of one controller."""
+
     axis_id_y: int
     scale_y: int
     axis_id_x: int | None
@@ -34,16 +40,45 @@ class ResolvedAxisScroll:
     condition: frozenset[int] | None
 
 
+@dataclass(frozen=True)
+class ResolvedHotkey:
+    """A combination of physical inputs and what it does."""
+
+    codes: frozenset[int]
+    action: Action
+    cooldown: float
+    hold: float = 0.0
+    tap: bool = False
+
+
+@dataclass(frozen=True)
+class ResolvedSequence:
+    """Physical inputs to press one after the other."""
+
+    codes: tuple[int, ...]
+    action: Action
+    cooldown: float
+
+
 @dataclass
 class ResolvedProfile:
-    hotkeys: dict[frozenset[int], Action]
-    cooldowns: dict[frozenset[int], float]
+    """A profile bound to the inputs of one controller."""
+
+    hotkeys: tuple[ResolvedHotkey, ...]
     mouse: tuple[ResolvedAxisMouse, ...]
     scroll: tuple[ResolvedAxisScroll, ...]
+    sequences: tuple[ResolvedSequence, ...] = ()
 
     @property
     def empty(self) -> bool:
-        return not (self.hotkeys or self.mouse or self.scroll)
+        """Tell whether nothing at all is mapped."""
+        return not (self.hotkeys or self.sequences or self.mouse or self.scroll)
+
+    def actions(self) -> list[Action]:
+        """Every action of the profile, for the virtual devices to declare."""
+        return [hotkey.action for hotkey in self.hotkeys] + [
+            sequence.action for sequence in self.sequences
+        ]
 
 
 def _resolve_condition(
@@ -60,13 +95,26 @@ def _resolve_condition(
     return frozenset(input_to_virtual(es_map[name]) for name in condition)
 
 
-def resolve_profile(profile: Profile, es_map: ESInputMap) -> ResolvedProfile:
-    hotkeys: dict[frozenset[int], Action] = {}
-    cooldowns: dict[frozenset[int], float] = {}
-    mouse: list[ResolvedAxisMouse] = []
-    scroll: list[ResolvedAxisScroll] = []
+def _shared_codes(es_map: ESInputMap) -> set[int]:
+    """Physical inputs that EmulationStation maps to more than one name.
 
-    # ── Hotkeys ────────────────────────────────────────────────────
+    Without a dedicated hotkey button, ``hotkey`` and ``select`` are the same
+    button: a tap on it must not fire, it would hijack the game's input.
+    """
+    seen: set[int] = set()
+    shared: set[int] = set()
+    for inp in es_map.values():
+        code = input_to_virtual(inp)
+        if code in seen:
+            shared.add(code)
+        seen.add(code)
+    return shared
+
+
+def _resolve_hotkeys(profile: Profile, es_map: ESInputMap) -> list[ResolvedHotkey]:
+    hotkeys: dict[tuple[frozenset[int], bool], ResolvedHotkey] = {}
+    shared = _shared_codes(es_map)
+
     for hotkey in profile.hotkeys:
         missing = [name for name in hotkey.trigger if name not in es_map]
         if missing:
@@ -79,22 +127,62 @@ def resolve_profile(profile: Profile, es_map: ESInputMap) -> ResolvedProfile:
 
         codes = frozenset(input_to_virtual(es_map[name]) for name in hotkey.trigger)
 
-        # Evita combos que colapsan físicamente en el mismo input.
+        # Combos whose inputs are physically the same one cannot be told apart.
         if len(codes) < len(hotkey.trigger):
-            _logger.debug(
-                "Ignored combo %r: physical overlap.",
+            _logger.debug("Ignored combo %r: physical overlap.", hotkey.trigger)
+            continue
+
+        if hotkey.tap and codes & shared:
+            _logger.info(
+                "Tap on %r ignored: that button is also mapped to another input.",
                 hotkey.trigger,
             )
             continue
 
-        hotkeys[codes] = hotkey.action
-        cooldowns[codes] = hotkey.cooldown
-
+        hotkeys[(codes, hotkey.tap)] = ResolvedHotkey(
+            codes=codes,
+            action=hotkey.action,
+            cooldown=hotkey.cooldown,
+            hold=hotkey.hold,
+            tap=hotkey.tap,
+        )
         _logger.debug(
-            "  %s → %s",
+            "  %s → %s%s",
             " + ".join(hotkey.trigger),
             " + ".join(hex(code) for code in sorted(codes)),
+            " (tap)" if hotkey.tap else "",
         )
+
+    return list(hotkeys.values())
+
+
+def _resolve_sequences(profile: Profile, es_map: ESInputMap) -> list[ResolvedSequence]:
+    sequences = []
+    for sequence in profile.sequences:
+        missing = [name for name in sequence.trigger if name not in es_map]
+        if missing:
+            _logger.warning(
+                "Sequence %r: %r not found in emulationstation gamepad settings — ignored.",
+                sequence.trigger,
+                missing,
+            )
+            continue
+        sequences.append(
+            ResolvedSequence(
+                codes=tuple(input_to_virtual(es_map[name]) for name in sequence.trigger),
+                action=sequence.action,
+                cooldown=sequence.cooldown,
+            )
+        )
+    return sequences
+
+
+def resolve_profile(profile: Profile, es_map: ESInputMap) -> ResolvedProfile:
+    """Bind the input names of a profile to the inputs of one controller."""
+    hotkeys = _resolve_hotkeys(profile, es_map)
+    sequences = _resolve_sequences(profile, es_map)
+    mouse: list[ResolvedAxisMouse] = []
+    scroll: list[ResolvedAxisScroll] = []
 
     # ── Mouse ──────────────────────────────────────────────────────
     for cfg in profile.mouse:
@@ -198,8 +286,8 @@ def resolve_profile(profile: Profile, es_map: ESInputMap) -> ResolvedProfile:
         )
 
     return ResolvedProfile(
-        hotkeys=hotkeys,
-        cooldowns=cooldowns,
+        hotkeys=tuple(hotkeys),
         mouse=tuple(mouse),
         scroll=tuple(scroll),
+        sequences=tuple(sequences),
     )

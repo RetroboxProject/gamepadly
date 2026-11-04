@@ -39,7 +39,7 @@ _logger = logging.getLogger(__name__)
 DEFAULT_MAPPER_COMMAND: tuple[str, ...] = (sys.executable, "-m", "gamepadly.mapper")
 
 
-class Controller(Protocol):
+class Controller(Protocol):  # pylint: disable=too-few-public-methods
     """What the manager needs to know about a controller."""
 
     guid: str
@@ -59,6 +59,8 @@ def _profile_names(system: str, emulator: str, core: str) -> tuple[str, ...]:
         "any.keys",
     )
 
+
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def _profile_candidates(
     rom: Path,
     system: str,
@@ -82,6 +84,8 @@ def _profile_candidates(
         for name in _profile_names(system, emulator, core):
             yield base / name
 
+
+# pylint: disable-next=too-many-arguments,too-many-positional-arguments
 def find_profile(
     rom: Path,
     system: str,
@@ -90,6 +94,7 @@ def find_profile(
     profiles_dir: Path,
     user_profiles_dir: Path,
 ) -> Path | None:
+    """Return the first existing profile of the lookup order, or None."""
     for path in _profile_candidates(
         rom, system, emulator, core, profiles_dir, user_profiles_dir
     ):
@@ -131,16 +136,17 @@ def _terminate_process(proc: subprocess.Popen) -> None:
 
 @dataclass
 class GamepadManager(AbstractContextManager):
-    """
-    Lanza una instancia del mapper por cada controller joystick activo
-    y las termina al salir del contexto.
+    """Run one mapper per active controller while the context is open.
 
-    Si no se encuentra ningún perfil .keys, no lanza nada.
+    Nothing is started when no ``.keys`` profile is found. ``profiles_dir``,
+    ``user_profiles_dir`` and ``es_input`` are resolved by the caller: the
+    manager knows nothing about where the applications using it live.
+    ``mapper_command`` is the command that starts a mapper (this package's
+    by default).
 
-    profiles_dir, user_profiles_dir y es_input los resuelve el caller y se
-    los pasa a este constructor: GamepadManager no sabe nada de dónde viven
-    las aplicaciones que lo usan. `mapper_command` es el comando que lanza
-    un mapper (por defecto, este mismo paquete).
+    ``profile`` skips the lookup: the caller hands over the profile to use
+    (e.g. one it has composed for this session), and the lookup directories
+    are not used.
     """
 
     system: str
@@ -152,6 +158,7 @@ class GamepadManager(AbstractContextManager):
     user_profiles_dir: Path
     es_input: Path
     mapper_command: tuple[str, ...] = DEFAULT_MAPPER_COMMAND
+    profile: Path | None = None
 
     _processes: list[subprocess.Popen] = field(
         default_factory=list,
@@ -162,14 +169,19 @@ class GamepadManager(AbstractContextManager):
     def __enter__(self) -> "GamepadManager":
         self._stop_all()
 
-        profile = find_profile(
-            rom=self.rom,
-            system=self.system,
-            emulator=self.emulator,
-            core=self.core,
-            profiles_dir=self.profiles_dir,
-            user_profiles_dir=self.user_profiles_dir,
-        )
+        profile = self.profile
+        if profile is not None and not profile.exists():
+            _logger.warning("gamepadly: profile not found: %s", profile)
+            return self
+        if profile is None:
+            profile = find_profile(
+                rom=self.rom,
+                system=self.system,
+                emulator=self.emulator,
+                core=self.core,
+                profiles_dir=self.profiles_dir,
+                user_profiles_dir=self.user_profiles_dir,
+            )
         if profile is None:
             return self
 
@@ -230,6 +242,7 @@ class GamepadManager(AbstractContextManager):
         _logger.debug("gamepadly: cmd=%s", " ".join(cmd))
 
         try:
+            # pylint: disable-next=consider-using-with  # owned by _stop_all()
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,

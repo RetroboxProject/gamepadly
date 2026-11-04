@@ -59,3 +59,14 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+
+[tool.pylint.main]
+# pygame defines its event constants at import time
+generated-members = ["pygame.*"]
+
+[tool.pylint.design]
+# dataclasses describing a mapping or a session carry many fields
+max-attributes = 12
+
+[tool.pylint.similarities]
+min-similarity-lines = 8

@@ -1,3 +1,5 @@
+"""Read the bindings of a controller from EmulationStation's es_input.cfg."""
+
 from __future__ import annotations
 
 import logging
@@ -9,6 +11,23 @@ from .guid import guid_matches, normalize_guid
 from .inputs import AxisInput, ButtonInput, ESInputMap, HatInput
 
 _logger = logging.getLogger(__name__)
+
+# EmulationStation stores one direction per stick axis; Batocera's evmapy
+# profiles also name the opposite one.
+_OPPOSITE_DIRECTIONS = {
+    "joystick1up": "joystick1down",
+    "joystick1left": "joystick1right",
+    "joystick2up": "joystick2down",
+    "joystick2left": "joystick2right",
+}
+
+
+def _add_opposite_directions(result: ESInputMap) -> None:
+    """Derive ``joystickNdown``/``joystickNright`` from the stored directions."""
+    for name, opposite in _OPPOSITE_DIRECTIONS.items():
+        inp = result.get(name)
+        if isinstance(inp, AxisInput) and opposite not in result:
+            result[opposite] = AxisInput(axis_id=inp.axis_id, value=-inp.value)
 
 
 def parse_es_input(xml_path: Path | str, guid: str) -> ESInputMap:
@@ -102,4 +121,5 @@ def parse_es_input(xml_path: Path | str, guid: str) -> ESInputMap:
         elif itype == "axis":
             result[name] = AxisInput(axis_id=iid, value=ivalue)
 
+    _add_opposite_directions(result)
     return result

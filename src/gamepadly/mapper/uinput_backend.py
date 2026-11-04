@@ -1,3 +1,5 @@
+"""Virtual keyboard and mouse the mappings write to."""
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +36,7 @@ class UInputPair:
     mouse: UInput | None
 
     def write_key(self, code: int, value: int) -> None:
+        """Write a key or a mouse button to the device that declares it."""
         if is_button(code):
             if self.mouse:
                 self.mouse.write(ec.EV_KEY, code, value)
@@ -42,10 +45,12 @@ class UInputPair:
                 self.kbd.write(ec.EV_KEY, code, value)
 
     def write_rel(self, rel: int, value: int) -> None:
+        """Write a relative motion to the mouse."""
         if self.mouse:
             self.mouse.write(ec.EV_REL, rel, value)
 
     def syn(self, has_kbd: bool = False, has_mouse: bool = False) -> None:
+        """Flush the events written so far."""
         if has_kbd and self.kbd:
             self.kbd.syn()
 
@@ -53,6 +58,7 @@ class UInputPair:
             self.mouse.syn()
 
     def close(self) -> None:
+        """Destroy both devices."""
         if self.kbd:
             self.kbd.close()
 
@@ -61,13 +67,14 @@ class UInputPair:
 
 
 def build_uinput(resolved: ResolvedProfile, player: int) -> UInputPair:
+    """Create the devices that declare every key and axis the profile uses."""
     kbd_keys: set[int] = set()
     mouse_buttons: set[int] = set()
 
     has_rel = bool(resolved.mouse)
     has_scroll = bool(resolved.scroll)
 
-    for action in resolved.hotkeys.values():
+    for action in resolved.actions():
         for code in action.uinput_keys():
             if is_button(code):
                 mouse_buttons.add(code)

@@ -346,6 +346,60 @@ You can also provide one or two axes explicitly:
 
 For two-axis scroll mappings, the first axis is interpreted as vertical scroll and the second as horizontal scroll.
 
+### Command (`exec`)
+
+Runs a shell command line, or each command of a list, when the trigger fires. As in evmapy,
+targets are shell command lines (pipes and quoting work). Unlike evmapy, which blocks until the
+command ends, Gamepadly runs them in the background, each in a session of its own: a command that
+ends the game (and the mapper with it) is not killed halfway.
+
+```json
+{
+  "trigger": ["hotkey", "start"],
+  "type": "exec",
+  "target": "retrobox-emukill"
+}
+```
+
+---
+
+## Trigger Modes
+
+`key` and `exec` mappings accept evmapy's `mode` and `hold`:
+
+| Option | Meaning |
+|---|---|
+| `"mode": "all"` | Default. The trigger is a combination: every input has to be held. |
+| `"mode": "any"` | Each input of the trigger fires the mapping on its own. |
+| `"mode": "sequence"` | The inputs have to be pressed one after the other (2 or more). |
+| `"hold": 1.5` | The combination has to stay held this many seconds before it fires. Not allowed with `sequence`. |
+
+Gamepadly adds `tap`:
+
+```json
+{
+  "trigger": "hotkey",
+  "type": "exec",
+  "target": "retrobox-overlay",
+  "tap": true
+}
+```
+
+A tap mapping fires when its single input is **released**, only if nothing else was pressed
+meanwhile and it was not held longer than half a second. The hotkey button can then open
+something on its own and still be the modifier of every `hotkey + …` combination. A tap is
+ignored when EmulationStation maps that button to another input too (e.g. no dedicated hotkey,
+so `hotkey` is `select`): it would hijack the game's input.
+
+Invalid mappings (unknown mode, negative hold, hold on a sequence, a sequence of one input,
+duplicate inputs or keys, tap on a combination) are logged and skipped, like evmapy rejects them.
+
+### Stick directions
+
+EmulationStation stores one direction per stick axis (`joystick1up`, `joystick1left`...).
+Gamepadly derives the opposite ones (`joystick1down`, `joystick1right`, `joystick2down`,
+`joystick2right`), which Batocera's profiles use as triggers.
+
 ---
 
 ## Conditions
@@ -555,6 +609,9 @@ with GamepadManager(
 When entering the context, the manager starts the required mapper processes. When exiting, it stops them.
 
 If no profile is found, the manager does nothing. This makes it safe to integrate unconditionally.
+
+Pass `profile=Path(...)` to skip the lookup and use a profile the caller has prepared (for
+instance one composed for the current session); the profile directories are then not used.
 
 ---
 
