@@ -799,6 +799,18 @@ gamepadly-mapper --list
 
 ## Troubleshooting
 
+### Keyboard hotkeys do nothing
+
+Controllers are usually readable by the user of the session (systemd's `uaccess`), keyboards
+are not: their event devices are `root:input`, mode 0660, so the keyboard mapper needs the
+user in the `input` group (see [Permissions](#permissions)). Each mapper the manager starts logs
+to `$XDG_STATE_HOME/gamepadly/` (`~/.local/state/gamepadly/keyboards.log`, `player-1.log`...):
+the keyboard mapper lists the keyboards it watches and warns when it cannot read them.
+
+On Apple keyboards (`hid_apple`, Asahi Linux) the top row sends media keys unless Fn is held:
+`F7` arrives as `KEY_PREVIOUSSONG`. `sudo evtest` shows what a key sends;
+`options hid_apple fnmode=2` in `/etc/modprobe.d/` makes F1–F12 the default.
+
 ### `ModuleNotFoundError: No module named 'gamepadly'`
 
 This usually means Python cannot see the parent directory containing the `gamepadly` package.

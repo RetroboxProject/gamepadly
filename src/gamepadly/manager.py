@@ -43,6 +43,13 @@ KEYBOARD_SECTION = "actions_keyboard"
 DEFAULT_MAPPER_COMMAND: tuple[str, ...] = (sys.executable, "-m", "gamepadly.mapper")
 
 
+def mapper_log(what: str) -> Path:
+    """Where a mapper process logs (``keyboards``, ``player 1``...), started
+    afresh with it: ``$XDG_STATE_HOME/gamepadly/``."""
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    return state / "gamepadly" / f"{what.replace(' ', '-')}.log"
+
+
 class Controller(Protocol):  # pylint: disable=too-few-public-methods
     """What the manager needs to know about a controller."""
 
@@ -262,14 +269,18 @@ class GamepadManager(AbstractContextManager):
         cmd = [*self.mapper_command, *args]
         _logger.debug("gamepadly: %s: cmd=%s", what, " ".join(cmd))
 
+        log = mapper_log(what)
         try:
-            # pylint: disable-next=consider-using-with  # owned by _stop_all()
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            log.parent.mkdir(parents=True, exist_ok=True)
+            # the child keeps its own copy of the descriptor
+            with log.open("wb") as output:
+                # pylint: disable-next=consider-using-with  # owned by _stop_all()
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
         except OSError as exc:
             _logger.error("gamepadly: error launching mapper: %s", exc)
             return
