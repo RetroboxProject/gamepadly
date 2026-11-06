@@ -131,6 +131,7 @@ class _Keyboards:
 
     devices: dict[str, evdev.InputDevice] = field(default_factory=dict)
     last_scan: float = float("-inf")
+    warned: bool = False
 
     def rescan(self, now: float) -> None:
         """Open the keyboards that appeared since the last scan."""
@@ -142,6 +143,17 @@ class _Keyboards:
                 continue
             try:
                 device = evdev.InputDevice(path)
+            except PermissionError:
+                if not self.warned:
+                    # keyboards, unlike controllers, are not the seat user's
+                    # by default (no uaccess): root:input, mode 0660
+                    _logger.warning(
+                        "Cannot read %s: keyboard hotkeys need read access to the "
+                        "keyboards' event devices (e.g. the 'input' group).",
+                        path,
+                    )
+                    self.warned = True
+                continue
             except OSError:
                 continue
             if is_keyboard(device):
