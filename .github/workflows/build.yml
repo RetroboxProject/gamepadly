@@ -1,11 +1,26 @@
 name: build
 
+# Builds and tests gamepadly (sdist/wheel, .deb and .rpm). Releases are
+# manual: run this workflow with a version (see release-dispatch) to publish
+# the packages plus SHA256SUMS as a GitHub Release. Pushes to main and pull
+# requests only build and test.
+
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Tag to publish (e.g. v0.2.2). Empty = build only.'
+        required: false
+        type: string
+        default: ''
+      prerelease:
+        description: 'Mark the release as pre-release'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -31,9 +46,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - name: Version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: sed -i "s/^version = .*/version = \"${GITHUB_REF_NAME#v}\"/" pyproject.toml
+      - name: Version from input
+        if: inputs.version != ''
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          printf '%s\n' "$VERSION_INPUT" | grep -Eq '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+            || { echo "::error::version $VERSION_INPUT is not valid (vMAJOR.MINOR[.PATCH])"; exit 1; }
+          sed -i "s/^version = .*/version = \"${VERSION_INPUT#v}\"/" pyproject.toml
       - run: pip install build twine
       - run: python -m build
       - run: twine check dist/*
@@ -44,9 +64,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: sed -i "s/^version = .*/version = \"${GITHUB_REF_NAME#v}\"/" pyproject.toml
+      - name: Version from input
+        if: inputs.version != ''
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          printf '%s\n' "$VERSION_INPUT" | grep -Eq '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+            || { echo "::error::version $VERSION_INPUT is not valid (vMAJOR.MINOR[.PATCH])"; exit 1; }
+          sed -i "s/^version = .*/version = \"${VERSION_INPUT#v}\"/" pyproject.toml
       - run: |
           sudo apt-get update
           sudo apt-get install -y build-essential dpkg-dev debhelper dh-python pybuild-plugin-pyproject python3-all python3-hatchling
@@ -65,9 +90,14 @@ jobs:
       - run: dnf install -y git rpm-build rpmdevtools python3-devel pyproject-rpm-macros systemd-rpm-macros python3-hatchling python3-pygame python3-evdev
       - uses: actions/checkout@v4
       - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: sed -i "s/^version = .*/version = \"${GITHUB_REF_NAME#v}\"/" pyproject.toml
+      - name: Version from input
+        if: inputs.version != ''
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+        run: |
+          printf '%s\n' "$VERSION_INPUT" | grep -Eq '^v[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+            || { echo "::error::version $VERSION_INPUT is not valid (vMAJOR.MINOR[.PATCH])"; exit 1; }
+          sed -i "s/^version = .*/version = \"${VERSION_INPUT#v}\"/" pyproject.toml
       - run: tools/build-rpm.sh
       - run: |
           cd dist && for f in *.rpm; do mv "$f" "${f%.noarch.rpm}.fc${{ matrix.fedora }}.noarch.rpm"; done
@@ -125,9 +155,10 @@ jobs:
       - run: sudo ./install.sh --no-deps && sudo ./install.sh --uninstall && ! test -e /etc/udev/rules.d/70-gamepadly-uinput.rules
 
   release:
-    # Every tag v* publishes a GitHub release as soon as the packages build; the smoke tests
-    # run in parallel (they gate PyPI below, not the release).
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Runs only when this workflow is started by hand with a version. The
+    # release is published as soon as the packages build; the smoke tests run
+    # in parallel (they gate PyPI below, not the release).
+    if: github.event_name == 'workflow_dispatch' && inputs.version != ''
     needs: [dist, deb, rpm]
     runs-on: ubuntu-24.04
     permissions:
@@ -143,15 +174,23 @@ jobs:
           find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\n' | sort \
             | xargs -d '\n' sha256sum > SHA256SUMS
           cat SHA256SUMS
+      # Creates the tag on the built commit when the release is published.
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.version }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.prerelease }}
           generate_release_notes: true
           files: artifacts/*
 
   pypi:
     # Enable by creating the repo variable PUBLISH_PYPI=true and a trusted publisher on PyPI
-    # (project "gamepadly", workflow build.yml, environment "pypi").
-    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_PYPI == 'true'
+    # (project "gamepadly", workflow build.yml, environment "pypi"). Only
+    # non-pre-release versions are uploaded: vX.Y.Z pre-releases would look
+    # like regular versions on PyPI.
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.version != '' &&
+      !inputs.prerelease && vars.PUBLISH_PYPI == 'true'
     needs: [test, dist, smoke-deb, smoke-rpm, smoke-install]
     runs-on: ubuntu-24.04
     environment: pypi
