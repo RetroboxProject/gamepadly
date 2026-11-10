@@ -210,6 +210,13 @@ class MapperEngine:
         state = self.state
         state.pressed.add(code)
 
+        # a combination waiting for its hold time has to be held as it is:
+        # another input pressed meanwhile (Hotkey+Up while the hotkey alone
+        # waits) cancels it, or it would fire later, on top of what that input
+        # did
+        for codes in [codes for codes in state.pending if code not in codes]:
+            del state.pending[codes]
+
         # a tap is only a tap if nothing else is pressed while it is held
         for armed in [armed for armed in state.armed_taps if armed != code]:
             del state.armed_taps[armed]
@@ -279,6 +286,10 @@ class MapperEngine:
         # the inputs of a combination are not taps any more
         for code in hotkey.codes:
             self.state.armed_taps.pop(code, None)
+
+        # the shorter combinations waiting inside this one are taken by it
+        for codes in [codes for codes in self.state.pending if codes < hotkey.codes]:
+            del self.state.pending[codes]
 
         _logger.debug("▼ %s", " + ".join(hex(code) for code in sorted(hotkey.codes)))
         self.state.active[hotkey.codes] = hotkey

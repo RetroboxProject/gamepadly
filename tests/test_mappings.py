@@ -86,6 +86,30 @@ def test_hold_cancelled_by_early_release(tmp_path):
     assert not ui.events
 
 
+def test_hold_cancelled_by_another_press(tmp_path):
+    """A held hotkey waiting to fire alone gives way to Hotkey+Start."""
+    engine = _engine(tmp_path, [
+        _key(["hotkey"], "KEY_F7", hold=0.75),
+        _key(["hotkey", "start"], "KEY_ESC"),
+    ])
+    ui = FakeUI()
+    engine.press(button_code(HOTKEY), 0.0, ui)
+    engine.press(button_code(START), 0.2, ui)
+    engine.release(button_code(START), 0.3, ui)
+    engine.tick(1.0, ui)
+    assert ui.events == [(ec.KEY_ESC, 1), (ec.KEY_ESC, 0)]
+
+
+def test_hold_cancelled_by_unrelated_press(tmp_path):
+    engine = _engine(tmp_path, [_key(["hotkey"], "KEY_F7", hold=0.75)])
+    ui = FakeUI()
+    engine.press(button_code(HOTKEY), 0.0, ui)
+    engine.press(button_code(A), 0.2, ui)
+    engine.release(button_code(A), 0.3, ui)
+    engine.tick(1.0, ui)
+    assert not ui.events
+
+
 def test_sequence(tmp_path):
     engine, ui = _engine(tmp_path, [_key(["a", "b", "a"], "KEY_Z", mode="sequence")]), FakeUI()
     for code in (A, B, B, A, B, A):

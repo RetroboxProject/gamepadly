@@ -372,7 +372,7 @@ ends the game (and the mapper with it) is not killed halfway.
 | `"mode": "all"` | Default. The trigger is a combination: every input has to be held. |
 | `"mode": "any"` | Each input of the trigger fires the mapping on its own. |
 | `"mode": "sequence"` | The inputs have to be pressed one after the other (2 or more). |
-| `"hold": 1.5` | The combination has to stay held this many seconds before it fires. Not allowed with `sequence`. |
+| `"hold": 1.5` | The combination has to stay held, as it is, this many seconds before it fires: pressing another input meanwhile cancels it (a hold on the hotkey alone gives way to Hotkey+Start), and so does a longer combination that fires with it. Not allowed with `sequence`. |
 
 Gamepadly adds `tap`:
 
